@@ -89,7 +89,7 @@ namespace TodosAPI.Data
 
 8. Incluir novo serviço em Startup.ConfigureServices, antes de services.AddControllers()
 ```csharp
-services.AddDbContext<ApiContext>(opt => opt.UseInMemoryDatabase());
+services.AddDbContext<ApiContext>(opt => opt.UseInMemoryDatabase(databaseName: "todo.db"));
 ```
 
 9. Alterar também o Startup.cs para incluir CORS:
