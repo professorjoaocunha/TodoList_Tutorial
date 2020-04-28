@@ -8,54 +8,55 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TodosAPI.Data;
 using TodosAPI.Models;
+using TodosAPI.Services;
 
 namespace TodosAPI.Controllers
 {
     [Route("api/[controller]")]
-    [Authorize]
     [ApiController]
-    public class TodoController : ControllerBase
+    [Authorize(Roles = "admin")]
+    public class UserController : ControllerBase
     {
         private readonly ApiContext _context;
 
-        public TodoController(ApiContext context)
+        public UserController(ApiContext context)
         {
             _context = context;
         }
 
-        // GET: api/Todo
+        // GET: api/User
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Todo>>> GetTodos()
+        public async Task<ActionResult<IEnumerable<dynamic>>> GetUsers()
         {
-            return await _context.Todos.ToListAsync();
+            return await _context.Users.Select(u => MapUser(u)).ToListAsync();
         }
 
-        // GET: api/Todo/5
+        // GET: api/User/5
         [HttpGet("{id}")]
-        public async Task<ActionResult<Todo>> GetTodo(long id)
+        public async Task<ActionResult<dynamic>> GetUser(int id)
         {
-            var todo = await _context.Todos.FindAsync(id);
+            var user = await _context.Users.FindAsync(id);
 
-            if (todo == null)
+            if (user == null)
             {
                 return NotFound();
             }
 
-            return todo;
+            return MapUser(user);
         }
 
-        // PUT: api/Todo/5
+        // PUT: api/User/5
         // To protect from overposting attacks, enable the specific properties you want to bind to, for
         // more details, see https://go.microsoft.com/fwlink/?linkid=2123754.
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutTodo(long id, Todo todo)
+        public async Task<IActionResult> PutUser(int id, User user)
         {
-            if (id != todo.Id)
+            if (id != user.Id)
             {
                 return BadRequest();
             }
 
-            _context.Entry(todo).State = EntityState.Modified;
+            _context.Entry(user).State = EntityState.Modified;
 
             try
             {
@@ -63,7 +64,7 @@ namespace TodosAPI.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!TodoExists(id))
+                if (!UserExists(id))
                 {
                     return NotFound();
                 }
@@ -76,37 +77,48 @@ namespace TodosAPI.Controllers
             return NoContent();
         }
 
-        // POST: api/Todo
+        // POST: api/User
         // To protect from overposting attacks, enable the specific properties you want to bind to, for
         // more details, see https://go.microsoft.com/fwlink/?linkid=2123754.
         [HttpPost]
-        public async Task<ActionResult<Todo>> PostTodo(Todo todo)
+        public async Task<ActionResult<User>> PostUser(User user)
         {
-            _context.Todos.Add(todo);
+            user.Password = LoginService.HashPassword(user.Password);
+
+            _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction("GetTodo", new { id = todo.Id }, todo);
+            return CreatedAtAction("GetUser", new { id = user.Id }, MapUser(user));
         }
 
-        // DELETE: api/Todo/5
+        // DELETE: api/User/5
         [HttpDelete("{id}")]
-        public async Task<ActionResult<Todo>> DeleteTodo(long id)
+        public async Task<ActionResult<User>> DeleteUser(int id)
         {
-            var todo = await _context.Todos.FindAsync(id);
-            if (todo == null)
+            var user = await _context.Users.FindAsync(id);
+            if (user == null)
             {
                 return NotFound();
             }
 
-            _context.Todos.Remove(todo);
+            _context.Users.Remove(user);
             await _context.SaveChangesAsync();
 
-            return todo;
+            return MapUser(user);
         }
 
-        private bool TodoExists(long id)
+        private bool UserExists(int id)
         {
-            return _context.Todos.Any(e => e.Id == id);
+            return _context.Users.Any(e => e.Id == id);
+        }   
+
+        private dynamic MapUser(User user) 
+        {
+            return new
+            {
+                Id = user.Id,
+                Username = user.Username   
+            };
         }
     }
 }

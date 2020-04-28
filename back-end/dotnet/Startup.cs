@@ -12,6 +12,11 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using TodosAPI.Data;
+using System.Text;
+using TodosAPI.Helpers;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using TodosAPI.Services;
 
 namespace TodosAPI
 {
@@ -30,7 +35,39 @@ namespace TodosAPI
             // services.AddDbContext<ApiContext>(opt => opt.UseInMemoryDatabase(databaseName: "TodoDB"));
             services.AddDbContext<ApiContext>(opt => opt.UseSqlite("Data Source=todo.db"));
 
+            services.AddCors();
             services.AddControllers();
+
+            // Add functionality to inject IOptions<T>
+            services.AddOptions();
+
+            // Add security settings to be injected
+            services.Configure<SecuritySettings>(Configuration.GetSection("Security"));            
+
+            // Add scoed
+            services.AddScoped<ILoginService, LoginService>();
+
+            services.AddAuthentication(x =>
+            {
+                x.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                x.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddJwtBearer(x =>
+            {
+                var securitySettings = new SecuritySettings();
+                Configuration.GetSection("Security").Bind(securitySettings);
+                var key = Encoding.ASCII.GetBytes(securitySettings.Secret);            
+            
+                x.RequireHttpsMetadata = false;
+                x.SaveToken = true;
+                x.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(key),
+                    ValidateIssuer = false,
+                    ValidateAudience = false
+                };
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -45,11 +82,12 @@ namespace TodosAPI
 
             app.UseRouting();
 
-            app.UseAuthorization();
-
             app.UseCors(c => c.AllowAnyOrigin()
                 .AllowAnyMethod()
                 .AllowAnyHeader());
+
+            app.UseAuthentication();            
+            app.UseAuthorization();
 
             app.UseEndpoints(endpoints =>
             {
