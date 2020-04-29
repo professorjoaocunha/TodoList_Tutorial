@@ -199,18 +199,44 @@ namespace TodosAPI.Models
 }
 ```
 
-3. Alterar arquivo "Data\ApiContext.cs" para adicionar DbSet para usuários para armazenar o usuário no DbContext. Incluir também o método OnModelCreating(ModelBuilder), para inserir primeiro usuário admin:
+3. Criar arquivo Helpers/AuthenticationHelper.cs para computar o Hash da senha:
+```csharp
+using System.Text;
+
+namespace TodosAPI.Helpers 
+{
+    public static class AuthenticationHelper
+    {
+        public static string ComputeHash(string input)
+        {
+            var sha1 = System.Security.Cryptography.SHA1.Create();
+
+            byte[] bytes = Encoding.UTF8.GetBytes(input);
+            var hash = sha1.ComputeHash(bytes);
+            return System.Convert.ToBase64String(hash);
+        }
+    }
+}
+```
+
+4. Alterar arquivo "Data\ApiContext.cs" para adicionar DbSet para usuários para armazenar o usuário no DbContext. Incluir também o método OnModelCreating(ModelBuilder), para inserir primeiro usuário admin:
 ```csharp
 public DbSet<User> Users { get; set; }
         
 protected override void OnModelCreating(ModelBuilder modelBuilder)
 {
     // initial user. password must be changed later.
-    modelBuilder.Entity<User>().HasData(new User { Id = 1, Username = "admin", Password = LoginService.HashPassword("123"), Role = User.RoleEnum.admin.ToString() });
+    modelBuilder.Entity<User>()
+      .HasData(new User { Id = 1, Username = "admin", Password = AuthenticationHelper.ComputeHash("123"), Role = User.RoleEnum.admin.ToString() });
+
+    // set uUsername as Unique
+    modelBuilder.Entity<User>()
+      .HasIndex(u => u.Username)
+      .IsUnique();
 }
 ```
 
-4. Adicionar migration para incluir tabela usuário:
+5. Adicionar migration para incluir tabela usuário:
 ```bash
 dotnet ef migrations add Authentication
 dotnet ef database update
@@ -223,7 +249,7 @@ dotnet-aspnet-codegenerator -p TodosAPI.csproj controller -name UserController -
 
 6. Criar em UserController.cs o método MapUser(User):
 ```csharp
-private dynamic MapUser(User user) 
+private static dynamic MapUser(User user) 
 {
     return new
     {
@@ -259,7 +285,7 @@ public async Task<ActionResult<dynamic>> GetUser(int id)
 [HttpPost]
 public async Task<ActionResult<User>> PostUser(User user)
 {
-    user.Password = LoginService.HashPassword(user.Password);
+    user.Password = AuthenticationHelper.ComputeHash(user.Password);
 
     _context.Users.Add(user);
     await _context.SaveChangesAsync();
@@ -312,7 +338,7 @@ HTTP PUT https://localhost:5001/api/User
 HTTP DELETE https://localhost:5001/api/User/2
 ```
 
-11. Agora é hora de incluir a autenticação e autorização.
+11. Parar a aplicação (CTRL+C). Agora é hora de incluir a autenticação e autorização.
 
 12. Adicionar configuração para chave secreta do JWT. Este Token será usado para gerar o Token JWT e deve ser conhecido somente pelo servidor. Incluir a seguinte configuração no appsettings.json (e appsettings.Development.json):
 ```json
@@ -379,18 +405,9 @@ namespace TodosAPI.Services
             this._securitySettings = securitySettings.Value;
         }
 
-        public static string HashPassword(string password)
-        {
-            var sha1 = System.Security.Cryptography.SHA1.Create();
-
-            byte[] bytes = Encoding.UTF8.GetBytes(password);
-            var hash = sha1.ComputeHash(bytes);
-            return System.Convert.ToBase64String(hash);
-        }
-
         public (User user, string token) Authenticate(Login login)
         {
-            var user = _dbContext.Users.SingleOrDefault(u => u.Username == login.Username && u.Password == HashPassword(login.Password));
+            var user = _dbContext.Users.SingleOrDefault(u => u.Username == login.Username && u.Password == AuthenticationHelper.ComputeHash(login.Password));
             
             // return null if user not found
             if (user == null)
@@ -478,7 +495,7 @@ namespace TodosAPI.Controllers
 }
 ```
 
-16. Alterar o método ConfigureServices(IServiceCollection) do Startup.cs para adicionar Middleware de Autenticação:
+16. Alterar o método ConfigureServices(IServiceCollection) do Startup.cs para adicionar Middleware de Autenticação. Incluir também as cláusulas using requeridas pelo código:
 ```csharp
 public void ConfigureServices(IServiceCollection services)
 {
