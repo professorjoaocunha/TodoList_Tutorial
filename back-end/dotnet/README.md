@@ -3,7 +3,7 @@
 
 2. Criar TodosAPI
 ```bash
-dotnet new TodosAPI -o TodosAPI
+dotnet new webapi -o TodosAPI
 ```
 
 3. Entrar na pasta
